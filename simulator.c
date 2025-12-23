@@ -17,6 +17,12 @@
 #define LANE_WIDTH 50
 #define ARROW_SIZE 15
 
+#define LIGHT_ALL_RED 0
+#define LIGHT_A       1
+#define LIGHT_B       2
+#define LIGHT_C       3
+#define LIGHT_D       4
+
 
 const char* VEHICLE_FILE = "vehicles.data";
 
@@ -266,7 +272,7 @@ void* chequeQueue(void* arg){
         // Priority condition: if Road A has >10 vehicles
         int sizeA = (queueA.rear - queueA.front + MAX_VEHICLES) % MAX_VEHICLES + 1;
         if (!isEmpty(&queueA) && sizeA > 10) {
-            sharedData->nextLight = 2; // green for A
+            sharedData->nextLight = LIGHT_A; // green for A
             printf("Priority: Serving Road A\n");
             while (sizeA > 5) {
                 Vehicle v = dequeue(&queueA);
@@ -277,19 +283,19 @@ void* chequeQueue(void* arg){
         } else {
             // Normal round robin: serve B, then C, then D
             if (!isEmpty(&queueB)) {
-                sharedData->nextLight = 2;
+                sharedData->nextLight = LIGHT_B; // green for B
                 Vehicle v = dequeue(&queueB);
                 printf("Vehicle %s passed from Road B\n", v.vehicleNumber);
                 sleep(2);
             }
             if (!isEmpty(&queueC)) {
-                sharedData->nextLight = 2;
+                sharedData->nextLight = LIGHT_C; // green for C
                 Vehicle v = dequeue(&queueC);
                 printf("Vehicle %s passed from Road C\n", v.vehicleNumber);
                 sleep(2);
             }
             if (!isEmpty(&queueD)) {
-                sharedData->nextLight = 2;
+                sharedData->nextLight = LIGHT_D; // green for D
                 Vehicle v = dequeue(&queueD);
                 printf("Vehicle %s passed from Road D\n", v.vehicleNumber);
                 sleep(2);
@@ -326,10 +332,51 @@ void* readAndParseFile(void* arg) {
                 sleep(2);
     }
 }
-int main()
-{
+
+    int main() {
+    // Initialize queues
     initQueue(&queueA);
     initQueue(&queueB);
     initQueue(&queueC);
     initQueue(&queueD);
+
+    pthread_t tQueue, tReadFile;
+    SDL_Window* window = NULL;
+    SDL_Renderer* renderer = NULL;
+    SDL_Event event;
+
+    if (!initializeSDL(&window, &renderer)) {
+        return -1;
+    }
+
+    SDL_mutex* mutex = SDL_CreateMutex();
+    SharedData sharedData = { 0, 0 }; // 0 => all red
+
+    TTF_Font* font = TTF_OpenFont(MAIN_FONT, 24);
+    if (!font) SDL_Log("Failed to load font: %s", TTF_GetError());
+
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderClear(renderer);
+    drawRoadsAndLane(renderer, font);
+    SDL_RenderPresent(renderer);
+
+    // Start threads: one for queue logic, one for reading vehicles
+    pthread_create(&tQueue, NULL, chequeQueue, &sharedData);
+    pthread_create(&tReadFile, NULL, readAndParseFile, NULL);
+
+    // Continue the UI thread
+    bool running = true;
+    while (running) {
+        refreshLight(renderer, &sharedData);
+
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) running = false;
+        }
+    }
+
+    SDL_DestroyMutex(mutex);
+    if (renderer) SDL_DestroyRenderer(renderer);
+    if (window) SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 0;
 }

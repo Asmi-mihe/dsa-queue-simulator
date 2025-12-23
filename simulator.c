@@ -64,7 +64,10 @@ VehicleQueue queueA, queueB, queueC, queueD;
 bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font);
 void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int y);
+void drawLightForA(SDL_Renderer* renderer, bool isRed);
 void drawLightForB(SDL_Renderer* renderer, bool isRed);
+void drawLightForC(SDL_Renderer* renderer, bool isRed);
+void drawLightForD(SDL_Renderer* renderer, bool isRed);
 void refreshLight(SDL_Renderer *renderer, SharedData* sharedData);
 void* chequeQueue(void* arg);
 void* readAndParseFile(void* arg);
@@ -105,6 +108,21 @@ void drawArrwow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, 
     }
 }
 
+// Draw light for Road A (top side)
+void drawLightForA(SDL_Renderer* renderer, bool isRed){
+    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+    SDL_Rect lightBox = {400, 100, 50, 30}; // position near top
+    SDL_RenderFillRect(renderer, &lightBox);
+
+    if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);
+
+    SDL_Rect straight_Light = {405, 105, 20, 20};
+    SDL_RenderFillRect(renderer, &straight_Light);
+    drawArrwow(renderer, 435,105, 435, 125, 445,115);
+}
+
+// Draw light for Road B (bottom side) 
 void drawLightForB(SDL_Renderer* renderer, bool isRed){
     // draw light box
     SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
@@ -116,6 +134,34 @@ void drawLightForB(SDL_Renderer* renderer, bool isRed){
     SDL_Rect straight_Light = {405, 305, 20, 20};
     SDL_RenderFillRect(renderer, &straight_Light);
     drawArrwow(renderer, 435,305, 435, 305+20, 435+10, 305+10);
+}
+
+// Draw light for Road C (right side)
+void drawLightForC(SDL_Renderer* renderer, bool isRed){
+    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+    SDL_Rect lightBox = {650, 400, 50, 30}; // position near right
+    SDL_RenderFillRect(renderer, &lightBox);
+
+    if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);
+
+    SDL_Rect straight_Light = {655, 405, 20, 20};
+    SDL_RenderFillRect(renderer, &straight_Light);
+    drawArrwow(renderer, 685,405, 685,425, 695,415);
+}
+
+// Draw light for Road D (left side)
+void drawLightForD(SDL_Renderer* renderer, bool isRed){
+    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+    SDL_Rect lightBox = {100, 400, 50, 30}; // position near left
+    SDL_RenderFillRect(renderer, &lightBox);
+
+    if(isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    else SDL_SetRenderDrawColor(renderer, 11, 156, 50, 255);
+
+    SDL_Rect straight_Light = {105, 405, 20, 20};
+    SDL_RenderFillRect(renderer, &straight_Light);
+    drawArrwow(renderer, 135,405, 135,425, 145,415);
 }
 
 void drawRoadsAndLane(SDL_Renderer *renderer, TTF_Font *font) {
@@ -173,21 +219,48 @@ void displayText(SDL_Renderer *renderer, TTF_Font *font, char *text, int x, int 
 }
 
 void refreshLight(SDL_Renderer *renderer, SharedData* sharedData){
-    if(sharedData->nextLight == sharedData->currentLight) return; // early return
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderClear(renderer);
+    drawRoadsAndLane(renderer, NULL);
 
-    if(sharedData->nextLight == 0){ // trun off all lights
-        drawLightForB(renderer, false);
+    // Example: use currentLight to decide which road is green
+    switch(sharedData->nextLight){
+        case 0: // all red
+            drawLightForA(renderer, true);
+            drawLightForB(renderer, true);
+            drawLightForC(renderer, true);
+            drawLightForD(renderer, true);
+            break;
+        case 1: // Road A green
+            drawLightForA(renderer, false);
+            drawLightForB(renderer, true);
+            drawLightForC(renderer, true);
+            drawLightForD(renderer, true);
+            break;
+        case 2: // Road B green
+            drawLightForA(renderer, true);
+            drawLightForB(renderer, false);
+            drawLightForC(renderer, true);
+            drawLightForD(renderer, true);
+            break;
+        case 3: // Road C green
+            drawLightForA(renderer, true);
+            drawLightForB(renderer, true);
+            drawLightForC(renderer, false);
+            drawLightForD(renderer, true);
+            break;
+        case 4: // Road D green
+            drawLightForA(renderer, true);
+            drawLightForB(renderer, true);
+            drawLightForC(renderer, true);
+            drawLightForD(renderer, false);
+            break;
     }
-    if(sharedData->nextLight == 2) drawLightForB(renderer, true);
-    else drawLightForB(renderer, false);
     SDL_RenderPresent(renderer);
-    printf("Light of queue updated from %d to %d\n", sharedData->currentLight,  sharedData->nextLight);
-    // update the light
     sharedData->currentLight = sharedData->nextLight;
-    fflush(stdout);
 }
 
-    void* chequeQueue(void* arg){
+void* chequeQueue(void* arg){
     SharedData* sharedData = (SharedData*)arg;
     while (1) {
         // Priority condition: if Road A has >10 vehicles
@@ -253,8 +326,6 @@ void* readAndParseFile(void* arg) {
                 sleep(2);
     }
 }
-
-
 int main()
 {
     initQueue(&queueA);

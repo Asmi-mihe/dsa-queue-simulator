@@ -308,7 +308,8 @@ void* chequeQueue(void* arg){
 void* readAndParseFile(void* arg) {
     while(1){
         FILE* file = fopen(VEHICLE_FILE, "r");
-        if (!file) { perror("Error opening file"); continue; }
+        if (!file) { perror("Error opening file"); continue;
+         }
 
         char line[MAX_LINE_LENGTH];
         while (fgets(line, sizeof(line), file)) {

@@ -6,24 +6,30 @@
 #include <stdio.h> 
 #include <string.h>
  
+//Configuration constants
 #define MAX_VEHICLES 100
 #define MAX_LINE_LENGTH 100
-#define MAIN_FONT "assets/fonts/DejaVuSans.ttf" 
+#define MAIN_FONT "assets/fonts/DejaVuSans.ttf"
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 #define ROAD_WIDTH 150
 #define LANE_WIDTH 50
 
+#define VEHICLE_PASS_TIME 800   // milliseconds per vehicle in normal mode
+#define PRIORITY_PASS_TIME 600  // milliseconds per vehicle in priority mode
+#define MAX_SPRITES 50 
+
+//File based communication
 const char* VEHICLE_FILE = "vehicles.data"; 
 
-//Traffic light 
+//Traffic light States
 #define LIGHT_ALL_RED 0
 #define LIGHT_A 1
 #define LIGHT_B 2
 #define LIGHT_C 3
 #define LIGHT_D 4
 
-
+//Data structures
 //Adds vehicles and queue structures
 typedef struct {
     char vehicleNumber[10];
@@ -38,17 +44,37 @@ typedef struct {
 typedef struct {
     int currentLight;
     int nextLight;
+    int lastServedCount;   // number of vehicles served in last cycle
+    int lastGreenDuration; // computed green time in ms
+    int remainingTime;     // time left for current green in ms
 } SharedData;
 
+typedef struct {
+    int x, y;          // position
+    int dx, dy;        // movement per frame
+    bool active;       // is this vehicle currently moving
+} VehicleSprite;
+
+VehicleSprite sprites[MAX_SPRITES];
+
+// ---- Globals ----
+VehicleQueue queueA, queueB, queueC, queueD;
+SDL_mutex* mutexA;
+SDL_mutex* mutexB;
+SDL_mutex* mutexC;
+SDL_mutex* mutexD;
+
+//Queue Helpers
 void initQueue(VehicleQueue* q) 
 { 
-    q->front = q->rear = -1; }
-
+    q->front = q->rear = -1; 
+}
 bool isEmpty(VehicleQueue* q) { 
-    return q->front == -1; }
-
+    return q->front == -1; 
+}
 bool isFull(VehicleQueue* q) { 
-    return (q->rear + 1) % MAX_VEHICLES == q->front; }
+    return (q->rear + 1) % MAX_VEHICLES == q->front; 
+}
 
 void enqueue(VehicleQueue* q, Vehicle v) {
     if (isFull(q)) 
@@ -67,130 +93,164 @@ Vehicle v = q->data[q->front];
     return v;
 
 }
-
-//Global queues as well as mutexes
-VehicleQueue queueA, queueB, queueC, queueD;
-SDL_mutex* mutexA;
-SDL_mutex* mutexB;
-SDL_mutex* mutexC; 
-SDL_mutex* mutexD;
+int queueSize(VehicleQueue* q) {
+    if (isEmpty(q)) 
+    return 0;
+    return (q->rear - q->front + MAX_VEHICLES) % MAX_VEHICLES + 1;
+}
 
 //File Reader 
-int readVehicleFile(void* arg) {
-    FILE* file = fopen(VEHICLE_FILE, "r");
-    if (!file) 
-    {
-        perror("Error opening vehicle file");
-        return -1;
-    }
-    fseek(file, 0, SEEK_END); // Skip to old enteries
-    char line[MAX_LINE_LENGTH];
-
-    while(1) {
-        if(fgets(line, sizeof(line), file)) 
-        { // Process the line
-            line[strcspn(line, "\n")] = 0; // Remove newline
-            char* vehicleNumber = strtok(line, ":");
-            char* road = strtok(NULL, ":");
-
-            if (vehicleNumber && road) {
-                Vehicle v;
-                strcpy(v.vehicleNumber, vehicleNumber);
-                strcpy(v.road, road);
-
-                if (strcmp(road, "A") == 0){
-                    SDL_LockMutex(mutexA);
-                    enqueue(&queueA, v);
-                    SDL_UnlockMutex(mutexA);
-                }
-                else if (strcmp(road, "B") == 0){
-                    SDL_LockMutex(mutexB);
-                    enqueue(&queueB, v);
-                    SDL_UnlockMutex(mutexB);
-                }
-                else if (strcmp(road, "C") == 0){
-                    SDL_LockMutex(mutexC);
-                    enqueue(&queueC, v);
-                    SDL_UnlockMutex(mutexC);
-                }
-                else if (strcmp(road, "D") == 0){
-                    SDL_LockMutex(mutexD);
-                    enqueue(&queueD, v);
-                    SDL_UnlockMutex(mutexD);
-                }   
-                printf("Enqueued Vehicle %s on Road %s\n", vehicleNumber, road);
-        } 
-        else {
-            clearerr(file); // Clear EOF flag
-            SDL_Delay(500); // Wait before retrying
-        }
-    }
-    fclose(file);
-    return 0;
-}
-
 int chequeQueue(void* arg)
 {
+    int rrIndex=0;
     SharedData* sharedData = (SharedData*)arg;
     while (1) {
+// Read sizes safely
+        SDL_LockMutex(mutexA); 
+        int sizeA = queueSize(&queueA); 
+        SDL_UnlockMutex(mutexA);
+
+        SDL_LockMutex(mutexB); 
+        int sizeB = queueSize(&queueB); 
+        SDL_UnlockMutex(mutexB);
+
+        SDL_LockMutex(mutexC); 
+        int sizeC = queueSize(&queueC); 
+        SDL_UnlockMutex(mutexC);
+
+        SDL_LockMutex(mutexD); 
+        int sizeD = queueSize(&queueD); 
+        SDL_UnlockMutex(mutexD);
+
+
      // Priority condition: if Road A has >10 vehicles
-        if (!isEmpty(&queueA)) {
-            SDL_LockMutex(mutexA);
-            Vehicle v = dequeue(&queueA);
-            SDL_UnlockMutex(mutexA);
+        if (sizeA > 10) {
             sharedData->nextLight = LIGHT_A;
-            printf("Vehicle %s passed from Road A\n", v.vehicleNumber);
-            SDL_Delay(1000);
+            int servedCount = 0;
+            while (1) {
+                SDL_LockMutex(mutexA);
+                sizeA = queueSize(&queueA);
+                if (sizeA <= 5 || isEmpty(&queueA)){ 
+                    SDL_UnlockMutex(mutexA); 
+                    break; }
+                Vehicle v = dequeue(&queueA);
+                SDL_UnlockMutex(mutexA);
+
+                printf("PRIORITY: Vehicle %s passed from Road A (AL2)\n", v.vehicleNumber);
+                SDL_Delay(PRIORITY_PASS_TIME);
+
+                servedCount++;
+                sharedData->nextLight = LIGHT_A;
+            }
+            // After serving, record stats
+                sharedData->lastServedCount = servedCount;
+                sharedData->lastGreenDuration = servedCount * PRIORITY_PASS_TIME;
+                 sharedData->remainingTime = sharedData->lastGreenDuration;
+
+            // After priority clearance, continue to normal loop
+        } else {
+            // Compute total waiting across normal lanes (B,C,D), A is also considered but without priority
+            // Normal condition: round-robin fairness
+            int lanesCount = 4;
+            int totalWait = sizeA + sizeB + sizeC + sizeD;
+            if (totalWait == 0) {
+                sharedData->nextLight = LIGHT_ALL_RED;
+                SDL_Delay(200);
+                sharedData->remainingTime -= VEHICLE_PASS_TIME;
+                if (sharedData->remainingTime < 0) 
+                sharedData->remainingTime = 0;
+                continue;
             }
 
-            if (!isEmpty(&queueB)) 
-            {
-            SDL_LockMutex(mutexB);
-            Vehicle v = dequeue(&queueB);
-            SDL_UnlockMutex(mutexB);
-            sharedData->nextLight = LIGHT_B;
-            printf("Vehicle %s passed from Road B\n", v.vehicleNumber);
-            SDL_Delay(1000);
+            int order[4] = {LIGHT_B, LIGHT_C, LIGHT_D, LIGHT_A};
+            bool served = false;
+            Vehicle v;
+            for (int k = 0; k < 4; k++) {
+                int light = order[(rrIndex + k) % 4];
+                int servedCount=0;
+                switch (light) {
+                    case LIGHT_B:
+                        SDL_LockMutex(mutexB);
+                        if (!isEmpty(&queueB)) { 
+                            v = dequeue(&queueB); 
+                            servedCount = 1; }
+                        SDL_UnlockMutex(mutexB);
+                        if (servedCount) { 
+                            sharedData->nextLight = LIGHT_B; 
+                            printf("Vehicle %s passed from Road B\n", v.vehicleNumber); 
+                            SDL_Delay(VEHICLE_PASS_TIME); 
+                            sharedData->lastServedCount = servedCount;
+                            sharedData->lastGreenDuration = servedCount *VEHICLE_PASS_TIME;
+                            served = true;
 
+                        }
+                        break;
+
+                    case LIGHT_C:
+                        SDL_LockMutex(mutexC);
+                        if (!isEmpty(&queueC)) { 
+                            v = dequeue(&queueC); 
+                            servedCount = 1; }
+                        SDL_UnlockMutex(mutexC);
+                        if (servedCount) { 
+                            sharedData->nextLight = LIGHT_C; 
+                            printf("Vehicle %s passed from Road C\n", v.vehicleNumber); 
+                            SDL_Delay(VEHICLE_PASS_TIME); 
+                            sharedData->lastServedCount = servedCount;
+                            sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
+                            served = true;
+                        }
+                        break;
+
+                    case LIGHT_D:
+                        SDL_LockMutex(mutexD);
+                        if (!isEmpty(&queueD)) { 
+                            v = dequeue(&queueD); 
+                            servedCount = 1; }
+                        SDL_UnlockMutex(mutexD);
+                        if (servedCount) { 
+                            sharedData->nextLight = LIGHT_D; 
+                            printf("Vehicle %s passed from Road D\n", v.vehicleNumber); 
+                            SDL_Delay(VEHICLE_PASS_TIME); 
+                            sharedData->lastServedCount = servedCount;
+                            sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
+                            served = true;
+                        }
+                        break;
+                    case LIGHT_A:
+                        // A in normal mode (acts as a normal lane when <=10)
+                        SDL_LockMutex(mutexA);
+                        if (!isEmpty(&queueA)) { 
+                            v = dequeue(&queueA); 
+                            servedCount = 1; 
+                        }
+                        SDL_UnlockMutex(mutexA);
+                        if (servedCount) { 
+                            sharedData->nextLight = LIGHT_A; 
+                            printf("Vehicle %s passed from Road A (normal)\n", v.vehicleNumber);
+                            SDL_Delay(VEHICLE_PASS_TIME); 
+                            sharedData->lastServedCount = servedCount;
+                            sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
+                            served = true;
+                        }
+                        break;
+                }
+                if(served) 
+                break; // move to next cycle once we serve one
             }
-            if (!isEmpty(&queueC)) {
-    SDL_LockMutex(mutexC);
-                Vehicle v = dequeue(&queueC);
-                SDL_UnlockMutex(mutexC);
-                sharedData->nextLight = LIGHT_C;
-                printf("Vehicle %s passed from Road C\n", v.vehicleNumber);
-                SDL_Delay(1000);
-            }
-            if (!isEmpty(&queueD)) {
-                SDL_LockMutex(mutexD);
-                Vehicle v = dequeue(&queueD);
-                SDL_UnlockMutex(mutexD);
-                sharedData->nextLight = LIGHT_D;
-                printf("Vehicle %s passed from Road D\n", v.vehicleNumber);
-                SDL_Delay(1000);
-            }
+
+            rrIndex = (rrIndex + 1) % 4;
         }
+    }
         return 0;
 }
-
-// Function declarations
-bool initializeSDL(SDL_Window **window, SDL_Renderer **renderer);
-void drawRoads(SDL_Renderer *renderer);
-void displayText(SDL_Renderer *renderer, char *text, int x, int y);
-void drawLightForA(SDL_Renderer* renderer, bool isRed);
-void drawLightForB(SDL_Renderer* renderer, bool isRed);
-void drawLightForC(SDL_Renderer* renderer, bool isRed);
-void drawLightForD(SDL_Renderer* renderer, bool isRed);
-void refreshLight(SDL_Renderer *renderer, SharedData* sharedData);
-void* chequeQueue(void* arg);
-void* readAndParseFile(void* arg);
-
-void swap(int *a, int *b) {
+ void swap(int *a, int *b) {
     int temp = *a;
     *a = *b;
     *b = temp;
 }
 
+//Drawing
 void drawArrow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, int y3) {
     // Sort vertices by ascending Y (bubble sort approach)
     if (y1 > y2) { swap(&y1, &y2); swap(&x1, &x2); }
@@ -234,7 +294,6 @@ void drawLight(SDL_Renderer *renderer, int x, int y, bool isRed) {
     SDL_RenderFillRect(renderer, &light);
 }
 
-
 void drawRoads(SDL_Renderer *renderer, TTF_Font *font) {
     SDL_SetRenderDrawColor(renderer, 200,200,200,255);
     // Vertical road
@@ -246,7 +305,7 @@ void drawRoads(SDL_Renderer *renderer, TTF_Font *font) {
     SDL_Rect horizontalRoad = {0, WINDOW_HEIGHT / 2 - ROAD_WIDTH / 2, WINDOW_WIDTH, ROAD_WIDTH};
     SDL_RenderFillRect(renderer, &horizontalRoad);
 
-    // draw horizontal lanes
+    // lane separators
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     for(int i=0; i<=3; i++){
         // Horizontal lanes
@@ -254,8 +313,9 @@ void drawRoads(SDL_Renderer *renderer, TTF_Font *font) {
             0, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,  // x1,y1
             WINDOW_WIDTH/2 - ROAD_WIDTH/2, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i // x2, y2
         );
-        SDL_RenderDrawLine(renderer, 
-            800, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,
+
+        SDL_RenderDrawLine(renderer,
+            WINDOW_WIDTH, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,
             WINDOW_WIDTH/2 + ROAD_WIDTH/2, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i
         );
         // Vertical lanes
@@ -273,19 +333,94 @@ void drawRoads(SDL_Renderer *renderer, TTF_Font *font) {
     displayText(renderer, font, "C",WINDOW_WIDTH/2 - 10, WINDOW_HEIGHT/2 - 10);
     displayText(renderer, font, "D",10, WINDOW_HEIGHT/2 - 10);
     
+     // Priority label
+    displayText(renderer, font, "Priority Lane: AL2", 20, 20);
 }
+void drawCountdownBar(SDL_Renderer *renderer, int x, int y, int width, int height, SharedData *sharedData) {
+    if (sharedData->lastGreenDuration <= 0) 
+    return;
+
+    // Fraction of time left
+    float fraction = (float)sharedData->remainingTime / (float)sharedData->lastGreenDuration;
+    if (fraction < 0) 
+    fraction = 0;
+
+    // Draw shrinking bar
+    SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
+    SDL_Rect bar = {x, y, (int)(width * fraction), height};
+    SDL_RenderFillRect(renderer, &bar);
+
+    // Outline
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_Rect outline = {x, y, width, height};
+    SDL_RenderDrawRect(renderer, &outline);
+
+    // Show seconds left
+    char buffer[32];
+    float secondsLeft = sharedData->remainingTime / 1000.0f;
+    snprintf(buffer, sizeof(buffer), "%.1f s left", secondsLeft);
+    displayText(renderer, TTF_GetFontSDF, buffer, x, y - 20);
+}
+
 
 void displayText(SDL_Renderer *renderer, TTF_Font *font, const char *text, int x, int y){
     // display necessary text
     SDL_Color textColor = {0, 0, 0, 255}; // black color
     SDL_Surface *surface = TTF_RenderText_Solid(font, text, textColor);
+    if(!surface) {
+        return;
+    }
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
-
+    if(!texture) {
+        return;
+    }
     SDL_Rect textRect = {x,y,0,0 };
-    SDL_QueryTexture(texture, NULL, NULL, &rect.w, &rect.h);
-    SDL_RenderCopy(renderer, texture, NULL, &rect);
+    SDL_QueryTexture(texture, NULL, NULL, &textRect.w, &textRect.h);
+    SDL_RenderCopy(renderer, texture, NULL, &textRect);
    SDL_DestroyTexture(texture);
+}
+
+void drawHUD(SDL_Renderer *renderer, TTF_Font *font, SharedData *sharedData) {
+    char buffer[64];
+
+    // Road A
+    SDL_LockMutex(mutexA);
+    int sizeA = queueSize(&queueA);
+    SDL_UnlockMutex(mutexA);
+    snprintf(buffer, sizeof(buffer), "Road A: %d vehicles", sizeA);
+    displayText(renderer, font, buffer, 20, 60);
+
+    // Road B
+    SDL_LockMutex(mutexB);
+    int sizeB = queueSize(&queueB);
+    SDL_UnlockMutex(mutexB);
+    snprintf(buffer, sizeof(buffer), "Road B: %d vehicles", sizeB);
+    displayText(renderer, font, buffer, 20, 90);
+
+    // Road C
+    SDL_LockMutex(mutexC);
+    int sizeC = queueSize(&queueC);
+    SDL_UnlockMutex(mutexC);
+    snprintf(buffer, sizeof(buffer), "Road C: %d vehicles", sizeC);
+    displayText(renderer, font, buffer, 20, 120);
+
+    // Road D
+    SDL_LockMutex(mutexD);
+    int sizeD = queueSize(&queueD);
+    SDL_UnlockMutex(mutexD);
+    snprintf(buffer, sizeof(buffer), "Road D: %d vehicles", sizeD);
+    displayText(renderer, font, buffer, 20, 150);
+
+    // Priority status
+    if (sizeA > 10) {
+        displayText(renderer, font, "PRIORITY ACTIVE: Road A (AL2)", 20, 180);}
+
+    float seconds = sharedData->lastGreenDuration / 1000.0f;  // convert ms → seconds
+    snprintf(buffer, sizeof(buffer), "Last Green: %d vehicles, %1f s",
+    sharedData->lastServedCount,
+    seconds);
+        displayText(renderer, font, buffer, 20, 210);
 }
 
 // Refresh lights based on SharedData
@@ -306,25 +441,44 @@ void refreshLights(SDL_Renderer *renderer, TTF_Font *font, SharedData *sharedDat
         default: break;
     }
 
+        if (sharedData->nextLight == LIGHT_A) {
+            drawCountdownBar(renderer, WINDOW_WIDTH/2 - 40, 140, 80, 10, sharedData);
+        }
+        if (sharedData->nextLight == LIGHT_B) {
+            drawCountdownBar(renderer, WINDOW_WIDTH/2 - 40, WINDOW_HEIGHT-100, 80, 10, sharedData);
+        }
+        if (sharedData->nextLight == LIGHT_C) {
+            drawCountdownBar(renderer, WINDOW_WIDTH-100, WINDOW_HEIGHT/2 + 40, 80, 10, sharedData);
+        }
+        if (sharedData->nextLight == LIGHT_D) {
+            drawCountdownBar(renderer, 40, WINDOW_HEIGHT/2 + 40, 80, 10, sharedData);
+        }
+
     // Position lights near each road
     drawLight(renderer, WINDOW_WIDTH/2 - 15, 100, redA);          // Top (A)
     drawLight(renderer, WINDOW_WIDTH/2 - 15, WINDOW_HEIGHT-130, redB); // Bottom (B)
     drawLight(renderer, WINDOW_WIDTH-130, WINDOW_HEIGHT/2 - 15, redC); // Right (C)
     drawLight(renderer, 100, WINDOW_HEIGHT/2 - 15, redD);         // Left (D)
 
+    drawHUD(renderer, font, sharedData);
     SDL_RenderPresent(renderer);
+
 }
 
 
 //pass the queue on this function for sharing the data
-void* readAndParseFile(void* arg) {
-    while(1){
-        FILE* file = fopen(VEHICLE_FILE, "r");
-        if (!file) { perror("Error opening file"); continue;
-         }
+int readAndParseFile(void* arg) {
+    FILE* file = fopen(VEHICLE_FILE, "r");
+    if (!file) {
+        perror("Error opening file");
+        return -1;
+    }
 
-        char line[MAX_LINE_LENGTH];
-        while (fgets(line, sizeof(line), file)) {
+    fseek(file, 0, SEEK_END); // Skip old entries
+    char line[MAX_LINE_LENGTH];
+
+    while(1){
+       if(fgets(line, sizeof(line), file)) {
             line[strcspn(line, "\n")] = 0;
             char* vehicleNumber = strtok(line, ":");
             char* road = strtok(NULL, ":");
@@ -334,16 +488,37 @@ void* readAndParseFile(void* arg) {
                 strcpy(v.vehicleNumber, vehicleNumber);
                 strcpy(v.road, road);
 
-                if (strcmp(road, "A") == 0) enqueue(&queueA, v);
-                else if (strcmp(road, "B") == 0) enqueue(&queueB, v);
-                else if (strcmp(road, "C") == 0) enqueue(&queueC, v);
-                else if (strcmp(road, "D") == 0) enqueue(&queueD, v);
+                if (strcmp(road, "A") == 0) { 
+                    SDL_LockMutex(mutexA); 
+                    enqueue(&queueA, v); 
+                    SDL_UnlockMutex(mutexA); 
+                }
+                else if (strcmp(road, "B") == 0) { 
+                    SDL_LockMutex(mutexB); 
+                    enqueue(&queueB, v); 
+                    SDL_UnlockMutex(mutexB); 
+                }
+                else if (strcmp(road, "C") == 0) { 
+                    SDL_LockMutex(mutexC); 
+                    enqueue(&queueC, v); 
+                    SDL_UnlockMutex(mutexC); 
+                }
+                else if (strcmp(road, "D") == 0) { 
+                    SDL_LockMutex(mutexD); 
+                    enqueue(&queueD, v); 
+                    SDL_UnlockMutex(mutexD); 
+                }
 
                 printf("Enqueued Vehicle %s on Road %s\n", vehicleNumber, road);
             }
         }
-                sleep(2);
+        else {
+            clearerr(file); // Clear EOF flag
+            SDL_Delay(500); // Wait before retrying
+        }
     }
+ fclose(file);
+    return 0;
 }
 
     int main() {
@@ -358,8 +533,11 @@ void* readAndParseFile(void* arg) {
     mutexB = SDL_CreateMutex();
     mutexC = SDL_CreateMutex();
     mutexD = SDL_CreateMutex();
-if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) return -1;
-    if (TTF_Init() == -1) return -1;
+
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) 
+    return -1;
+    if (TTF_Init() == -1) 
+    return -1;
 
     SDL_Window* window = SDL_CreateWindow("Traffic Simulation",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -367,7 +545,7 @@ if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) return -1;
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
-    SharedData sharedData = {0, 0};
+    SharedData sharedData = {LIGHT_ALL_RED, LIGHT_ALL_RED};
 
     // Start threads
     SDL_Thread* tQueue = SDL_CreateThread(chequeQueue, "QueueThread", &sharedData);

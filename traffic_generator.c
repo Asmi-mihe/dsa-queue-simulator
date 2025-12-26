@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>   // For sleep()
+#include <windows.h>   // For sleep()
 
 #define FILENAME "vehicles.data"
 
@@ -102,7 +102,7 @@ int main() {
         printf("Generated & Enqueued: %s:%c\n", v.number, v.lane);
         displayQueue();
 
-        sleep(1); // Wait 1 second before generating next entry
+        Sleep(1000); // Wait 1 second before generating next entry
     }
 
     fclose(file);

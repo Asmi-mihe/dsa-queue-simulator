@@ -11,7 +11,8 @@ int main() {
     char line[MAX_LINE_LENGTH];
 
     printf("Receiver is running... Watching %s for new vehicles.\n", FILENAME);
-
+    fflush(stdout);
+    
     // Open file in read mode
     file = fopen(FILENAME, "r");
     if (!file) {

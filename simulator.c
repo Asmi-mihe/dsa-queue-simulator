@@ -29,6 +29,9 @@ const char* VEHICLE_FILE = "vehicles.data";
 #define LIGHT_C 3
 #define LIGHT_D 4
 
+void displayText(SDL_Renderer *renderer, TTF_Font *font, const char *text, int x, int y);
+
+
 //Data structures
 //Adds vehicles and queue structures
 typedef struct {
@@ -210,21 +213,21 @@ void drawSprites(SDL_Renderer *renderer) {
             SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255);
             SDL_Rect taillight1, taillight2;
         if (sprites[i].dx > 0) { // moving right → tail at left
-                taillight1 = (SDL_Rect){sprites[i].x - 5, sprites[i].y, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x - 5, sprites[i].y + 10, 5, 5};
+                taillight1 = (SDL_Rect){sprites[i].x - sprites[i].width, sprites[i].y, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x - sprites[i].width, sprites[i].y + sprites[i].height, 5, 5};
             } else if (sprites[i].dx < 0) { // moving left → tail at right
-                taillight1 = (SDL_Rect){sprites[i].x + 30, sprites[i].y, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x + 30, sprites[i].y + 10, 5, 5};
+                taillight1 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y + sprites[i].height, 5, 5};
             } else if (sprites[i].dy > 0) { // moving down → tail at top
-                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y - 5, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x + 25, sprites[i].y - 5, 5, 5};
+                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y - sprites[i].height, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y - sprites[i].height, 5, 5};
             } else if (sprites[i].dy < 0) { // moving up → tail at bottom
-                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y + 15, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x + 25, sprites[i].y + 15, 5, 5};
+                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y + sprites[i].height, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y + sprites[i].height, 5, 5};
             }
 
-            SDL_RenderFillRect(renderer, &sprites[i].taillight1);
-            SDL_RenderFillRect(renderer, &sprites[i].taillight2);
+            SDL_RenderFillRect(renderer, &taillight1);
+            SDL_RenderFillRect(renderer, &taillight2);
 
         }
     }
@@ -234,8 +237,8 @@ void drawSprites(SDL_Renderer *renderer) {
 //Queue Thread: check queues and manage lights
 int chequeQueue(void* arg)
 {
-    int rrIndex=0;
     SharedData* sharedData = (SharedData*)arg;
+    int rrIndex=0;
     while (1) {
 // Read sizes safely
         SDL_LockMutex(mutexA); 
@@ -262,8 +265,9 @@ int chequeQueue(void* arg)
                 SDL_LockMutex(mutexA);
                 sizeA = queueSize(&queueA);
                 if (sizeA <= 5 || isEmpty(&queueA)){ 
-                    SDL_UnlockMutex(mutexA); 
-                    break; }
+                break; }
+                
+                SDL_LockMutex(mutexA);    
                 Vehicle v = dequeue(&queueA);
                 SDL_UnlockMutex(mutexA);
 
@@ -271,7 +275,6 @@ int chequeQueue(void* arg)
                 spawnVehicleSprite(v.road[0], sharedData);
                 SDL_Delay(PRIORITY_PASS_TIME);
                 servedCount++;
-                sharedData->nextLight = LIGHT_A;
             }
             // After serving, record stats
                 sharedData->lastServedCount = servedCount;
@@ -309,10 +312,11 @@ int chequeQueue(void* arg)
                             SDL_Delay(VEHICLE_PASS_TIME); 
                             sharedData->lastServedCount = servedCount;
                             sharedData->lastGreenDuration = servedCount *VEHICLE_PASS_TIME;
+                            sharedData->remainingTime = sharedData->lastGreenDuration;
                             served = true;
+                            break;
 
                         }
-                        break;
 
                     case LIGHT_C:
                         SDL_LockMutex(mutexC);
@@ -327,9 +331,10 @@ int chequeQueue(void* arg)
                             SDL_Delay(VEHICLE_PASS_TIME); 
                             sharedData->lastServedCount = servedCount;
                             sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
+                            sharedData->remainingTime = sharedData->lastGreenDuration;
                             served = true;
+                            break;
                         }
-                        break;
 
                     case LIGHT_D:
                         SDL_LockMutex(mutexD);
@@ -344,33 +349,35 @@ int chequeQueue(void* arg)
                             SDL_Delay(VEHICLE_PASS_TIME); 
                             sharedData->lastServedCount = servedCount;
                             sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
+                            sharedData->remainingTime = sharedData->lastGreenDuration;
                             served = true;
+                            break;
                         }
-                        break;
+                        
                     case LIGHT_A:
                         // A in normal mode (acts as a normal lane when <=10)
                         SDL_LockMutex(mutexA);
                         if (!isEmpty(&queueA)) { 
                             v = dequeue(&queueA); 
-                            servedCount = 1; 
+                            servedCount = 1;
+                            SDL_UnlockMutex(mutexA); 
+                            break;
                         }
-                        SDL_UnlockMutex(mutexA);
                         if (servedCount) { 
-                            sharedData->nextLight = LIGHT_A; 
-                            printf("Vehicle %s passed from Road A (normal)\n", v.vehicleNumber);
+                            sharedData->nextLight = light; 
+                            printf("Vehicle %s passed from Road A (normal)\n", v.vehicleNumber, light + 'A');
                             spawnVehicleSprite(v.road[0], sharedData);
                             SDL_Delay(VEHICLE_PASS_TIME); 
                             sharedData->lastServedCount = servedCount;
                             sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
+                            sharedData->remainingTime = sharedData->lastGreenDuration;
                             served = true;
+                            break;
                         }
-                        break;
-                }
-                if(served) 
-                break; // move to next cycle once we serve one
             }
-
             rrIndex = (rrIndex + 1) % 4;
+            }
+            SDL_Delay(50); // brief pause between cycles
         }
     }
         return 0;
@@ -467,7 +474,7 @@ void drawRoads(SDL_Renderer *renderer, TTF_Font *font) {
      // Priority label
     displayText(renderer, font, "Priority Lane: AL2", 20, 20);
 }
-void drawCountdownBar(SDL_Renderer *renderer, int x, int y, int width, int height, SharedData *sharedData) {
+void drawCountdownBar(SDL_Renderer *renderer, TTF_Font *font, int x, int y, int width, int height, SharedData *sharedData) {
     if (sharedData->lastGreenDuration <= 0) 
     return;
 
@@ -490,7 +497,7 @@ void drawCountdownBar(SDL_Renderer *renderer, int x, int y, int width, int heigh
     char buffer[32];
     float secondsLeft = sharedData->remainingTime / 1000.0f;
     snprintf(buffer, sizeof(buffer), "%.1f s left", secondsLeft);
-    displayText(renderer, TTF_GetFontSDF, buffer, x, y - 20);
+    displayText(renderer, font, buffer, x, y - 20);
 }
 
 
@@ -573,16 +580,16 @@ void refreshLights(SDL_Renderer *renderer, TTF_Font *font, SharedData *sharedDat
     }
 
         if (sharedData->nextLight == LIGHT_A) {
-            drawCountdownBar(renderer, WINDOW_WIDTH/2 - 40, 140, 80, 10, sharedData);
+            drawCountdownBar(renderer, font, WINDOW_WIDTH/2 - 40, 140, 80, 10, sharedData);
         }
         if (sharedData->nextLight == LIGHT_B) {
-            drawCountdownBar(renderer, WINDOW_WIDTH/2 - 40, WINDOW_HEIGHT-100, 80, 10, sharedData);
+            drawCountdownBar(renderer, font, WINDOW_WIDTH/2 - 40, WINDOW_HEIGHT-100, 80, 10, sharedData);
         }
         if (sharedData->nextLight == LIGHT_C) {
-            drawCountdownBar(renderer, WINDOW_WIDTH-100, WINDOW_HEIGHT/2 + 40, 80, 10, sharedData);
+            drawCountdownBar(renderer, font, WINDOW_WIDTH-100, WINDOW_HEIGHT/2 + 40, 80, 10, sharedData);
         }
         if (sharedData->nextLight == LIGHT_D) {
-            drawCountdownBar(renderer, 40, WINDOW_HEIGHT/2 + 40, 80, 10, sharedData);
+            drawCountdownBar(renderer, font, 40, WINDOW_HEIGHT/2 + 40, 80, 10, sharedData);
         }
 
     // Position lights near each road
@@ -592,13 +599,13 @@ void refreshLights(SDL_Renderer *renderer, TTF_Font *font, SharedData *sharedDat
     drawLight(renderer, 100, WINDOW_HEIGHT/2 - 15, redD);         // Left (D)
 
     drawHUD(renderer, font, sharedData);
-    SDL_RenderPresent(renderer);
 
 }
 
 
 //pass the queue on this function for sharing the data
 int readAndParseFile(void* arg) {
+    SharedData* sharedData = (SharedData*)arg;
     FILE* file = fopen(VEHICLE_FILE, "r");
     if (!file) {
         perror("Error opening file");
@@ -609,7 +616,7 @@ int readAndParseFile(void* arg) {
     char line[MAX_LINE_LENGTH];
 
     while(1){
-       if(fgets(line, sizeof(line), file)) {
+       while(fgets(line, sizeof(line), file)) {
             line[strcspn(line, "\n")] = 0;
             char* vehicleNumber = strtok(line, ":");
             char* road = strtok(NULL, ":");
@@ -643,13 +650,12 @@ int readAndParseFile(void* arg) {
                 printf("Enqueued Vehicle %s on Road %s\n", vehicleNumber, road);
             }
         }
-        else {
+
             clearerr(file); // Clear EOF flag
             SDL_Delay(500); // Wait before retrying
-        }
     }
- fclose(file);
-    return 0;
+        fclose(file);
+        return 0;
 }
 
     int main() {
@@ -676,11 +682,11 @@ int readAndParseFile(void* arg) {
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
-    SharedData sharedData = {LIGHT_ALL_RED, LIGHT_ALL_RED};
+    SharedData sharedData = {LIGHT_ALL_RED, LIGHT_ALL_RED, 0, 0, 0};
 
     // Start threads
     SDL_Thread* tQueue = SDL_CreateThread(chequeQueue, "QueueThread", &sharedData);
-    SDL_Thread* tReadFile = SDL_CreateThread(readAndParseFile, "FileThread", NULL);
+    SDL_Thread* tReadFile = SDL_CreateThread(readAndParseFile, "FileThread", &sharedData);
 
     // Load font
     TTF_Font* font = TTF_OpenFont(MAIN_FONT, 24);
@@ -699,8 +705,12 @@ int readAndParseFile(void* arg) {
         updateSprites();
         refreshLights(renderer, font, &sharedData);
         drawSprites(renderer);
-        refreshLights(renderer, font, &sharedData);
+        SDL_RenderPresent(renderer);
         SDL_Delay(50);
+        sharedData.remainingTime -= 50;
+        if (sharedData.remainingTime < 0)
+        sharedData.remainingTime = 0;
+
     }
 
     // Cleanup

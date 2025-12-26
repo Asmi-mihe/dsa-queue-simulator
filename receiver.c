@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <windows.h>
 
 #define FILENAME "vehicles.data"
 #define MAX_LINE_LENGTH 100
@@ -38,7 +38,7 @@ int main() {
         } else {
             // No new line yet, wait and retry
             clearerr(file);   // Clear EOF flag
-            sleep(1);
+            Sleep(1000); // Sleep for 1 second
         }
     }
 

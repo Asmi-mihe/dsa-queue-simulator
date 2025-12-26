@@ -53,11 +53,12 @@ typedef struct {
     int x, y;          // position
     int dx, dy;        // movement per frame
     bool active;       // is this vehicle currently moving
+    SDL_Color color; // car color
 } VehicleSprite;
 
 VehicleSprite sprites[MAX_SPRITES];
 
-// ---- Globals ----
+//Globals
 VehicleQueue queueA, queueB, queueC, queueD;
 SDL_mutex* mutexA;
 SDL_mutex* mutexB;
@@ -98,8 +99,82 @@ int queueSize(VehicleQueue* q) {
     return 0;
     return (q->rear - q->front + MAX_VEHICLES) % MAX_VEHICLES + 1;
 }
+//Vehicle Sprite spwan
+void spawnVehicleSprite(char road, SharedData* sharedData) {
+    for (int i = 0; i < MAX_SPRITES; i++) {
+        if (!sprites[i].active) {
+            sprites[i].active = true;
+    // Base speed factor: more vehicles = faster movement
+            float speedFactor = 1.0f;
+            if (sharedData->lastServedCount > 0) {
+                speedFactor = 1.0f + (sharedData->lastServedCount / 5.0f); 
+                // e.g., 5 vehicles → 2x speed
+            }
 
-//File Reader 
+            switch (road) {
+                case 'A': // from top
+                    sprites[i].x = WINDOW_WIDTH/2;
+                    sprites[i].y = 0;
+                    sprites[i].dx = 0;
+                    sprites[i].dy = 5;
+                    sprites[i].color = (SDL_Color){255, 0, 0, 255}; // red
+                    break;
+                case 'B': // from bottom
+                    sprites[i].x = WINDOW_WIDTH/2;
+                    sprites[i].y = WINDOW_HEIGHT;
+                    sprites[i].dx = 0;
+                    sprites[i].dy = -5;
+                    sprites[i].color = (SDL_Color){0, 255, 0, 255}; // green
+                    break;
+                case 'C': // from right
+                    sprites[i].x = WINDOW_WIDTH;
+                    sprites[i].y = WINDOW_HEIGHT/2;
+                    sprites[i].dx = -5;
+                    sprites[i].dy = 0;
+                    sprites[i].color = (SDL_Color){0, 0, 255, 255}; // blue
+                    break;
+                case 'D': // from left
+                    sprites[i].x = 0;
+                    sprites[i].y = WINDOW_HEIGHT/2;
+                    sprites[i].dx = 5;
+                    sprites[i].dy = 0;
+                    sprites[i].color = (SDL_Color){255, 255, 0, 255}; // yellow
+                    break;
+            }
+            break;
+        }
+    }
+}
+
+void updateSprites() {
+    for (int i = 0; i < MAX_SPRITES; i++) {
+        if (sprites[i].active) {
+            sprites[i].x += sprites[i].dx;
+            sprites[i].y += sprites[i].dy;
+            if (sprites[i].x < 0 || sprites[i].x > WINDOW_WIDTH ||
+                sprites[i].y < 0 || sprites[i].y > WINDOW_HEIGHT) {
+                sprites[i].active = false;
+            }
+        }
+    }
+}
+
+void drawSprites(SDL_Renderer *renderer) {
+    for (int i = 0; i < MAX_SPRITES; i++) {
+        if (sprites[i].active) {
+            SDL_SetRenderDrawColor(renderer,
+                                   sprites[i].color.r,
+                                   sprites[i].color.g,
+                                   sprites[i].color.b,
+                                   sprites[i].color.a);
+            SDL_Rect car = {sprites[i].x, sprites[i].y, 20, 10};
+            SDL_RenderFillRect(renderer, &car);
+        }
+    }
+}
+
+
+//Queue Thread: check queues and manage lights
 int chequeQueue(void* arg)
 {
     int rrIndex=0;
@@ -122,7 +197,6 @@ int chequeQueue(void* arg)
         int sizeD = queueSize(&queueD); 
         SDL_UnlockMutex(mutexD);
 
-
      // Priority condition: if Road A has >10 vehicles
         if (sizeA > 10) {
             sharedData->nextLight = LIGHT_A;
@@ -137,28 +211,24 @@ int chequeQueue(void* arg)
                 SDL_UnlockMutex(mutexA);
 
                 printf("PRIORITY: Vehicle %s passed from Road A (AL2)\n", v.vehicleNumber);
+                spawnVehicleSprite(v.road[0], sharedData);
                 SDL_Delay(PRIORITY_PASS_TIME);
-
                 servedCount++;
                 sharedData->nextLight = LIGHT_A;
             }
             // After serving, record stats
                 sharedData->lastServedCount = servedCount;
                 sharedData->lastGreenDuration = servedCount * PRIORITY_PASS_TIME;
-                 sharedData->remainingTime = sharedData->lastGreenDuration;
+                sharedData->remainingTime = sharedData->lastGreenDuration;
 
             // After priority clearance, continue to normal loop
         } else {
             // Compute total waiting across normal lanes (B,C,D), A is also considered but without priority
             // Normal condition: round-robin fairness
-            int lanesCount = 4;
             int totalWait = sizeA + sizeB + sizeC + sizeD;
             if (totalWait == 0) {
                 sharedData->nextLight = LIGHT_ALL_RED;
                 SDL_Delay(200);
-                sharedData->remainingTime -= VEHICLE_PASS_TIME;
-                if (sharedData->remainingTime < 0) 
-                sharedData->remainingTime = 0;
                 continue;
             }
 
@@ -178,6 +248,7 @@ int chequeQueue(void* arg)
                         if (servedCount) { 
                             sharedData->nextLight = LIGHT_B; 
                             printf("Vehicle %s passed from Road B\n", v.vehicleNumber); 
+                            spawnVehicleSprite(v.road[0], sharedData);
                             SDL_Delay(VEHICLE_PASS_TIME); 
                             sharedData->lastServedCount = servedCount;
                             sharedData->lastGreenDuration = servedCount *VEHICLE_PASS_TIME;
@@ -195,6 +266,7 @@ int chequeQueue(void* arg)
                         if (servedCount) { 
                             sharedData->nextLight = LIGHT_C; 
                             printf("Vehicle %s passed from Road C\n", v.vehicleNumber); 
+                            spawnVehicleSprite(v.road[0], sharedData);
                             SDL_Delay(VEHICLE_PASS_TIME); 
                             sharedData->lastServedCount = servedCount;
                             sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
@@ -211,6 +283,7 @@ int chequeQueue(void* arg)
                         if (servedCount) { 
                             sharedData->nextLight = LIGHT_D; 
                             printf("Vehicle %s passed from Road D\n", v.vehicleNumber); 
+                            spawnVehicleSprite(v.road[0], sharedData);
                             SDL_Delay(VEHICLE_PASS_TIME); 
                             sharedData->lastServedCount = servedCount;
                             sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
@@ -228,6 +301,7 @@ int chequeQueue(void* arg)
                         if (servedCount) { 
                             sharedData->nextLight = LIGHT_A; 
                             printf("Vehicle %s passed from Road A (normal)\n", v.vehicleNumber);
+                            spawnVehicleSprite(v.road[0], sharedData);
                             SDL_Delay(VEHICLE_PASS_TIME); 
                             sharedData->lastServedCount = servedCount;
                             sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
@@ -559,13 +633,15 @@ int readAndParseFile(void* arg) {
 
     bool running = true;
     SDL_Event event;
-
     while (running) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = false;
             }
         }
+        updateSprites();
+        refreshLights(renderer, font, &sharedData);
+        drawSprites(renderer);
         refreshLights(renderer, font, &sharedData);
         SDL_Delay(50);
     }

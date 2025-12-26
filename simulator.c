@@ -58,8 +58,6 @@ typedef struct {
     bool active;       // is this vehicle currently moving
     SDL_Color color; // car color
     int width, height; // randomized size
-    SDL_Rect headlight1, headlight2; // headlights
-    SDL_Rect taillight1, taillight2; // tail-lights
 } VehicleSprite;
 
 VehicleSprite sprites[MAX_SPRITES];
@@ -213,17 +211,17 @@ void drawSprites(SDL_Renderer *renderer) {
             SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255);
             SDL_Rect taillight1, taillight2;
         if (sprites[i].dx > 0) { // moving right → tail at left
-                taillight1 = (SDL_Rect){sprites[i].x - sprites[i].width, sprites[i].y, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x - sprites[i].width, sprites[i].y + sprites[i].height, 5, 5};
+                taillight1 = (SDL_Rect){sprites[i].x - 5, sprites[i].y, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x - 5, sprites[i].y + sprites[i].height, 5, 5};
             } else if (sprites[i].dx < 0) { // moving left → tail at right
                 taillight1 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y, 5, 5};
                 taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y + sprites[i].height, 5, 5};
             } else if (sprites[i].dy > 0) { // moving down → tail at top
-                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y - sprites[i].height, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y - sprites[i].height, 5, 5};
+                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y - 5, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width - 5, sprites[i].y - 5, 5, 5};
             } else if (sprites[i].dy < 0) { // moving up → tail at bottom
                 taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y + sprites[i].height, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y + sprites[i].height, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width - 5, sprites[i].y + sprites[i].height, 5, 5};
             }
 
             SDL_RenderFillRect(renderer, &taillight1);

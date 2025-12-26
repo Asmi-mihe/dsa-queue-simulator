@@ -1,12 +1,15 @@
+#include "receiver.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
 
-#define FILENAME "vehicles.data"
-#define MAX_LINE_LENGTH 100
+typedef struct Vehicle {
+    char number[9];
+    char lane;
+} Vehicle;
 
-void start_receiver(){
+int start_receiver(void* arg){
     FILE *file;
     char line[MAX_LINE_LENGTH];
 

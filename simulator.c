@@ -5,7 +5,9 @@
 #include <stdbool.h>
 #include <stdio.h> 
 #include <string.h>
- 
+#include "receiver.h"
+#include "traffic_generator.h" 
+
 //Configuration constants
 #define MAX_VEHICLES 100
 #define MAX_LINE_LENGTH 100
@@ -704,6 +706,8 @@ int readAndParseFile(void* arg) {
     // Start threads
     SDL_Thread* tQueue = SDL_CreateThread(chequeQueue, "QueueThread", &sharedData);
     SDL_Thread* tReadFile = SDL_CreateThread(readAndParseFile, "FileThread", &sharedData);
+    SDL_Thread* tReceiver = SDL_CreateThread((int(*)(void*))start_receiver, "ReceiverThread", NULL); 
+    SDL_Thread* tGenerator = SDL_CreateThread(start_traffic_generator, "TrafficGeneratorThread", NULL);
 
     // Load font
     TTF_Font* font = TTF_OpenFont(MAIN_FONT, 24);
@@ -733,6 +737,7 @@ int readAndParseFile(void* arg) {
     // Wait for threads to finish
     SDL_WaitThread(tQueue, NULL);
     SDL_WaitThread(tReadFile, NULL);
+    SDL_WaitThread(tReceiver, NULL);
 
     // Cleanup
     SDL_DestroyRenderer(renderer);

@@ -1,3 +1,4 @@
+#include "traffic_generator.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -76,7 +77,7 @@ void displayQueue() {
     printf("NULL\n");
 }
 
-int main() {
+int start_traffic_generator(void* arg) {
     FILE* file = fopen(FILENAME, "a");
     if (!file) {
         perror("Error opening file");

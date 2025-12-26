@@ -6,13 +6,13 @@
 #define FILENAME "vehicles.data"
 #define MAX_LINE_LENGTH 100
 
-int main() {
+void start_receiver(){
     FILE *file;
     char line[MAX_LINE_LENGTH];
 
     printf("Receiver is running... Watching %s for new vehicles.\n", FILENAME);
     fflush(stdout);
-    
+
     // Open file in read mode
     file = fopen(FILENAME, "r");
     if (!file) {
@@ -44,5 +44,4 @@ int main() {
     }
 
     fclose(file);
-    return 0;
 }

@@ -672,16 +672,35 @@ int readAndParseFile(void* arg) {
     mutexD = SDL_CreateMutex();
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) 
+    {
+    SDL_Log("SDL_Init Error: %s", SDL_GetError());
     return -1;
-    if (TTF_Init() == -1) 
-    return -1;
+    }
+
+    if (TTF_Init() == -1){
+        SDL_Log("TTF_Init Error: %s", TTF_GetError());
+        return -1;
+    } 
 
     SDL_Window* window = SDL_CreateWindow("Traffic Simulation",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN);
+    if (!window) {
+            SDL_Log("Window creation failed: %s", SDL_GetError());
+            TTF_Quit();
+            SDL_Quit();
+            return -1;
+            }
+
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-
+    if (!renderer) {
+            SDL_Log("Renderer creation failed: %s", SDL_GetError());
+            SDL_DestroyWindow(window);
+            TTF_Quit();
+            SDL_Quit();
+            return -1;
+        }
     SharedData sharedData = {LIGHT_ALL_RED, LIGHT_ALL_RED, 0, 0, 0};
 
     // Start threads
@@ -694,24 +713,28 @@ int readAndParseFile(void* arg) {
         SDL_Log("Failed to load font: %s", TTF_GetError());
     }
 
-    bool running = true;
+    bool localRunning = true;
     SDL_Event event;
-    while (running) {
+
+    while (localRunning) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
-                running = false;
+                localRunning = false;
             }
         }
         updateSprites();
         refreshLights(renderer, font, &sharedData);
         drawSprites(renderer);
         SDL_RenderPresent(renderer);
+
         SDL_Delay(50);
         sharedData.remainingTime -= 50;
         if (sharedData.remainingTime < 0)
         sharedData.remainingTime = 0;
-
     }
+    // Wait for threads to finish
+    SDL_WaitThread(tQueue, NULL);
+    SDL_WaitThread(tReadFile, NULL);
 
     // Cleanup
     SDL_DestroyRenderer(renderer);
@@ -725,5 +748,6 @@ int readAndParseFile(void* arg) {
     SDL_DestroyMutex(mutexC);
     SDL_DestroyMutex(mutexD);
 
+    printf("Simulation exited cleanly.\n");
     return 0;
 }

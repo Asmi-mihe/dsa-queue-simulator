@@ -54,6 +54,9 @@ typedef struct {
     int dx, dy;        // movement per frame
     bool active;       // is this vehicle currently moving
     SDL_Color color; // car color
+    int width, height; // randomized size
+    SDL_Rect headlight1, headlight2; // headlights
+    SDL_Rect taillight1, taillight2; // tail-lights
 } VehicleSprite;
 
 VehicleSprite sprites[MAX_SPRITES];
@@ -104,6 +107,11 @@ void spawnVehicleSprite(char road, SharedData* sharedData) {
     for (int i = 0; i < MAX_SPRITES; i++) {
         if (!sprites[i].active) {
             sprites[i].active = true;
+
+        // Random size: small car (25x12) to truck (40x18)
+        sprites[i].width = 25 + rand() % 16;   // 25–40
+        sprites[i].height = 12 + rand() % 7;   // 12–18
+
     // Base speed factor: more vehicles = faster movement
             float speedFactor = 1.0f;
             if (sharedData->lastServedCount > 0) {
@@ -111,32 +119,34 @@ void spawnVehicleSprite(char road, SharedData* sharedData) {
                 // e.g., 5 vehicles → 2x speed
             }
 
+        int laneOffset = (i % 2 == 0) ? -LANE_WIDTH/4 : LANE_WIDTH/4;
+
             switch (road) {
                 case 'A': // from top
-                    sprites[i].x = WINDOW_WIDTH/2;
+                    sprites[i].x = WINDOW_WIDTH/2 + laneOffset;
                     sprites[i].y = 0;
                     sprites[i].dx = 0;
-                    sprites[i].dy = 5;
+                    sprites[i].dy = (int)(5 * speedFactor);
                     sprites[i].color = (SDL_Color){255, 0, 0, 255}; // red
                     break;
                 case 'B': // from bottom
-                    sprites[i].x = WINDOW_WIDTH/2;
+                    sprites[i].x = WINDOW_WIDTH/2 + laneOffset;
                     sprites[i].y = WINDOW_HEIGHT;
                     sprites[i].dx = 0;
-                    sprites[i].dy = -5;
+                    sprites[i].dy = (int)(-5 * speedFactor);
                     sprites[i].color = (SDL_Color){0, 255, 0, 255}; // green
                     break;
                 case 'C': // from right
                     sprites[i].x = WINDOW_WIDTH;
                     sprites[i].y = WINDOW_HEIGHT/2;
-                    sprites[i].dx = -5;
+                    sprites[i].dx = (int)(-5 * speedFactor);
                     sprites[i].dy = 0;
                     sprites[i].color = (SDL_Color){0, 0, 255, 255}; // blue
                     break;
                 case 'D': // from left
                     sprites[i].x = 0;
                     sprites[i].y = WINDOW_HEIGHT/2;
-                    sprites[i].dx = 5;
+                    sprites[i].dx = (int)(5 * speedFactor);
                     sprites[i].dy = 0;
                     sprites[i].color = (SDL_Color){255, 255, 0, 255}; // yellow
                     break;
@@ -151,8 +161,7 @@ void updateSprites() {
         if (sprites[i].active) {
             sprites[i].x += sprites[i].dx;
             sprites[i].y += sprites[i].dy;
-            if (sprites[i].x < 0 || sprites[i].x > WINDOW_WIDTH ||
-                sprites[i].y < 0 || sprites[i].y > WINDOW_HEIGHT) {
+            if (sprites[i].x < 0 || sprites[i].x > WINDOW_WIDTH || sprites[i].y < 0 || sprites[i].y > WINDOW_HEIGHT) {
                 sprites[i].active = false;
             }
         }
@@ -162,13 +171,61 @@ void updateSprites() {
 void drawSprites(SDL_Renderer *renderer) {
     for (int i = 0; i < MAX_SPRITES; i++) {
         if (sprites[i].active) {
-            SDL_SetRenderDrawColor(renderer,
-                                   sprites[i].color.r,
-                                   sprites[i].color.g,
-                                   sprites[i].color.b,
-                                   sprites[i].color.a);
-            SDL_Rect car = {sprites[i].x, sprites[i].y, 20, 10};
+            //Car body
+            SDL_SetRenderDrawColor(renderer, 
+                sprites[i].color.r,
+                sprites[i].color.g,
+                sprites[i].color.b,
+                sprites[i].color.a);
+            SDL_Rect car = {sprites[i].x, sprites[i].y, sprites[i].width, sprites[i].height};
             SDL_RenderFillRect(renderer, &car);
+
+        // Headlights (white rectangles at front depending on direction)
+            SDL_SetRenderDrawColor(renderer, 255, 255, 200, 255); // pale yellow
+            SDL_Rect headlight1, headlight2;
+
+            if (sprites[i].dx > 0) { // moving right
+                headlight1 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y, 5, 5};
+                headlight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y + sprites[i].height - 5, 5, 5};
+            } 
+            else if 
+            (sprites[i].dx < 0) { // moving left
+                headlight1 = (SDL_Rect){sprites[i].x - sprites[i].width, sprites[i].y, 5, 5};
+                headlight2 = (SDL_Rect){sprites[i].x - sprites[i].width, sprites[i].y + sprites[i].height - 5, 5, 5};
+            } 
+            else if 
+            (sprites[i].dy > 0) { // moving down
+                headlight1 = (SDL_Rect){sprites[i].x, sprites[i].y + sprites[i].height, 5, 5};
+                headlight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y + sprites[i].height, 5, 5};
+            } else if 
+            (sprites[i].dy < 0) { // moving up
+                headlight1 = (SDL_Rect){sprites[i].x, sprites[i].y - sprites[i].height, 5, 5};
+                headlight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y - sprites[i].height, 5, 5};
+            }
+
+            SDL_RenderFillRect(renderer, &headlight1);
+            SDL_RenderFillRect(renderer, &headlight2);
+
+            // Tail-lights (back)
+            SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255);
+            SDL_Rect taillight1, taillight2;
+        if (sprites[i].dx > 0) { // moving right → tail at left
+                taillight1 = (SDL_Rect){sprites[i].x - 5, sprites[i].y, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x - 5, sprites[i].y + 10, 5, 5};
+            } else if (sprites[i].dx < 0) { // moving left → tail at right
+                taillight1 = (SDL_Rect){sprites[i].x + 30, sprites[i].y, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x + 30, sprites[i].y + 10, 5, 5};
+            } else if (sprites[i].dy > 0) { // moving down → tail at top
+                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y - 5, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x + 25, sprites[i].y - 5, 5, 5};
+            } else if (sprites[i].dy < 0) { // moving up → tail at bottom
+                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y + 15, 5, 5};
+                taillight2 = (SDL_Rect){sprites[i].x + 25, sprites[i].y + 15, 5, 5};
+            }
+
+            SDL_RenderFillRect(renderer, &sprites[i].taillight1);
+            SDL_RenderFillRect(renderer, &sprites[i].taillight2);
+
         }
     }
 }

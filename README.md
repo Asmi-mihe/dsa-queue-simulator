@@ -1,5 +1,5 @@
-Traffic Queue Simulator Project
-Assignment: Assignment #1 - Implementing Queue for solving the traffic light problem
+# **Traffic Queue Simulator Project**
+#### Assignment #1 - Implementing Queue for solving the traffic light problem
 
 Name: Asmi Baidya 
 
@@ -9,14 +9,14 @@ Date: 27th Dec 2025
 
 ---
 
-**Introduction**
+### **Introduction**
 
 
 This project involves the design and implementation of a traffic management system simulating a four-way intersection. The system generates vehicles with unique identifiers, assigns them randomly to lanes, and manages vehicle queues for each road. Traffic lights operate in a round-robin fashion with a priority mechanism to optimize flow, especially for heavily congested lanes. The system uses SDL2 for visualization and file-based communication for modular data exchange. Threading and mutexes ensure safe concurrent operations.
 
 ---
 
-**System Architecture**
+### **System Architecture**
 
 
 The system is divided into four main modules:
@@ -28,7 +28,7 @@ The system is divided into four main modules:
 
 ---
 
-**Data Structure**
+### **Data Structure**
 
 
 Data Structure	Implementation	Purpose
@@ -38,7 +38,7 @@ SharedData	Struct with mutex	Holds traffic light state and timing info
 
 ---
 
-**Key Features**
+### **Key Features**
 
 
 1\. Vehicle Queues
@@ -83,7 +83,7 @@ o	Green light duration and remaining time.
 
 ---
 
-**Threading Model**
+### **Threading Model**
 
 
 The system uses SDL threads for concurrency:
@@ -97,7 +97,7 @@ Mutexes (SDL\_mutex) ensure safe concurrent access to queues.
 
 ---
 
-**Functions Using Data Structures**
+### **Functions Using Data Structures**
 
 
 •	enqueue(VehicleQueue\*, Vehicle\*)
@@ -110,7 +110,7 @@ Mutexes (SDL\_mutex) ensure safe concurrent access to queues.
 
 ---
 
-**Algorithm for Processing Traffic**
+### **Algorithm for Processing Traffic**
 
 1\.	Vehicles are generated with random IDs and assigned lanes.
 2\.	Vehicles are enqueued into lane-specific queues.
@@ -122,7 +122,7 @@ Mutexes (SDL\_mutex) ensure safe concurrent access to queues.
 
 ---
 
-**Time Complexity**
+### **Time Complexity**
 
 
 File Reading (readVehiclesFromFiles)
@@ -164,13 +164,13 @@ Traffic Processing Algorithm
 
 ---
 
-**Source Code Link**
+### **Source Code Link**
 
 https://github.com/Asmi-mihe/dsa-queue-simulator
 
 ---
 
-**Summary**
+### **Summary**
 
 The traffic management system successfully simulates a four-way intersection with real-time vehicle generation, queue management, and traffic light control. SDL2 provides a visual interface, while file-based communication ensures modularity and extensibility. The system demonstrates:
 
@@ -186,7 +186,7 @@ This project can be extended with features such as:
 
 ---
 
-**References**
+### **References**
 
 •	Cormen, T. H., Leiserson, C. E., Rivest, R. L., \& Stein, C. Introduction to Algorithms (3rd ed.). MIT Press, 2009.
 
@@ -202,6 +202,6 @@ https://www.geeksforgeeks.org/queue-data-structure/
 •	TutorialsPoint. Queue Data Structure.
 https://www.tutorialspoint.com/data\_structures\_algorithms/queue\_algorithm.htm
 
-## 🎥 Simulator Demo
+### 🎥 Simulator Demo
 
 ![Queue Simulator Demo](Dsa-Queue-Simulator.gif)

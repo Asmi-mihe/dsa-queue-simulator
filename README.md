@@ -201,4 +201,4 @@ https://www.tutorialspoint.com/data\_structures\_algorithms/queue\_algorithm.htm
 
 ## 🎥 Simulator Demo
 
-[![Queue Simulator Demo](dsa-simulator.png)](Dsa-Queue-Simulator.mp4)
+![Queue Simulator Demo](Dsa-Queue-Simulator.gif)

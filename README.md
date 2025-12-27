@@ -4,12 +4,14 @@ Student Name: Asmi Baidya
 Roll Number: 05 
 Date: 27th Dec 2025
 
+---
 
 **Introduction**
 
 
 This project involves the design and implementation of a traffic management system simulating a four-way intersection. The system generates vehicles with unique identifiers, assigns them randomly to lanes, and manages vehicle queues for each road. Traffic lights operate in a round-robin fashion with a priority mechanism to optimize flow, especially for heavily congested lanes. The system uses SDL2 for visualization and file-based communication for modular data exchange. Threading and mutexes ensure safe concurrent operations.
 
+---
 
 **System Architecture**
 
@@ -21,17 +23,17 @@ The system is divided into four main modules:
 • Traffic Generator (traffic\_generator.c, traffic\_generator.h): Randomly generates vehicles and assigns them to lanes, writing them to the shared file and enqueuing them.
 • Shared Data Structures: Defines queues, vehicle structures, and synchronization primitives (mutexes).
 
+---
 
+**Data Structure**
 
-
-
-Data Structure
 
 Data Structure	Implementation	Purpose
 VehicleQueue	Linked list with mutex	Stores vehicles in each lane queue safely
 Vehicle	Struct with ID and lane	Represents individual vehicles
 SharedData	Struct with mutex	Holds traffic light state and timing info
 
+---
 
 **Key Features**
 
@@ -76,6 +78,7 @@ o	Green light duration and remaining time.
 •	Traffic lights and countdown bars visually indicate active lanes.
 •	HUD displays queue sizes and priority status.
 
+---
 
 **Threading Model**
 
@@ -89,6 +92,7 @@ The system uses SDL threads for concurrency:
 
 Mutexes (SDL\_mutex) ensure safe concurrent access to queues.
 
+---
 
 **Functions Using Data Structures**
 
@@ -101,6 +105,7 @@ Mutexes (SDL\_mutex) ensure safe concurrent access to queues.
 •	receiverThread()
 •	trafficGeneratorThread()
 
+---
 
 **Algorithm for Processing Traffic**
 
@@ -112,6 +117,7 @@ Mutexes (SDL\_mutex) ensure safe concurrent access to queues.
 6\.	Traffic light timing adjusts dynamically based on queue lengths.
 7\.	Visualization updates to reflect current state.
 
+---
 
 **Time Complexity**
 
@@ -141,22 +147,25 @@ o	Details: Removing a vehicle from the head of the queue is constant time with d
 o	Complexity: O(1)
 o	Details: The queue size is maintained as a variable, so checking size does not require traversal.
 
-**Traffic Light Update**
+
+Traffic Light Update
 
 •	Complexity: O(1)
 •	Details: Updating the traffic light state involves simple state changes and conditional checks, all constant time.
 
 
-**Traffic Processing Algorithm**
+Traffic Processing Algorithm
 
 •	Complexity: O(1) per cycle
 •	Details: Each cycle processes vehicles from one lane only, dequeuing a fixed number of vehicles, resulting in constant time per cycle.
 
+---
 
 **Source Code Link**
 
 https://github.com/Asmi-mihe/dsa-queue-simulator
 
+---
 
 **Summary**
 
@@ -172,8 +181,9 @@ This project can be extended with features such as:
 •	Logging and analytics of vehicle flow.
 •	Enhanced graphics and animations.
 
+---
 
-References
+**References**
 
 •	Cormen, T. H., Leiserson, C. E., Rivest, R. L., \& Stein, C. Introduction to Algorithms (3rd ed.). MIT Press, 2009.
 

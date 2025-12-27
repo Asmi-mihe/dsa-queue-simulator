@@ -3,9 +3,10 @@
         {
             "name": "Win32",
             "includePath": [
-                "C:/msys64/mingw64/include",
-                "C:/msys64/mingw64/include/SDL2",
-                "${workspaceFolder}/**"
+                "C:/Users/Acer/OneDrive/Desktop/SDL2/include",
+                "C:/Users/Acer/OneDrive/Desktop/SDL2_ttf/x86_64-w64-mingw32/include",
+                "${workspaceFolder}/**",
+                "C:/Users/Acer/OneDrive/Desktop/SDL2/include/SDL2"
             ],
             "defines": [
                 "_DEBUG",
@@ -14,7 +15,7 @@
             ],
             "cStandard": "c11",
             "cppStandard": "gnu++14",
-            "intelliSenseMode": "windows-gcc-x86"
+            "intelliSenseMode": "windows-gcc-x64"
         }
     ],
     "version": 4

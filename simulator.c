@@ -17,19 +17,11 @@
 #define ROAD_WIDTH 150
 #define LANE_WIDTH 50
 
-#define VEHICLE_PASS_TIME 800   // milliseconds per vehicle in normal mode
-#define PRIORITY_PASS_TIME 600  // milliseconds per vehicle in priority mode
 #define MAX_SPRITES 50 
 
 //File based communication
 const char* VEHICLE_FILE = "vehicles.data"; 
 
-//Traffic light States
-#define LIGHT_ALL_RED 0
-#define LIGHT_A 1
-#define LIGHT_B 2
-#define LIGHT_C 3
-#define LIGHT_D 4
 
 void displayText(SDL_Renderer *renderer, TTF_Font *font, const char *text, int x, int y);
 

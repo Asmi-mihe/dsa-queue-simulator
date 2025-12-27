@@ -3,6 +3,7 @@
 
 #include <SDL2/SDL.h>
 #include <stdbool.h>
+#include <SDL_ttf.h> 
 
 // Max vehicles constant
 #define MAX_VEHICLES 100

@@ -1,4 +1,5 @@
 #include "traffic_generator.h"
+#include "simulator.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,17 +7,6 @@
 #include <windows.h>   // For sleep()
 
 #define FILENAME "vehicles.data"
-
-// Vehicle structure
-typedef struct Vehicle {
-    char number[9];   // Vehicle number
-    char lane;        // Lane (A, B, C, D)
-    struct Vehicle* next;
-} Vehicle;
-
-// Queue pointers
-Vehicle* front = NULL;
-Vehicle* rear = NULL;
 
 // Generate a random vehicle number
 void generateVehicleNumber(char* buffer) {
@@ -37,45 +27,6 @@ char generateLane() {
     return lanes[rand() % 4];
 }
 
-// Enqueue a vehicle
-void enqueue(Vehicle v) {
-    Vehicle* newNode = (Vehicle*)malloc(sizeof(Vehicle));
-    strcpy(newNode->number, v.number);
-    newNode->lane = v.lane;
-    newNode->next = NULL;
-
-    if (rear == NULL) {
-        front = rear = newNode;
-    } else {
-        rear->next = newNode;
-        rear = newNode;
-    }
-}
-
-// Dequeue a vehicle
-Vehicle dequeue() {
-    Vehicle empty = {"", ' '};
-    if (front == NULL) {
-        return empty;
-    }
-    Vehicle v = *front;
-    Vehicle* temp = front;
-    front = front->next;
-    if (front == NULL) rear = NULL;
-    free(temp);
-    return v;
-}
-
-// Display the queue
-void displayQueue() {
-    Vehicle* temp = front;
-    printf("Current Queue: ");
-    while (temp != NULL) {
-        printf("[%s:%c] -> ", temp->number, temp->lane);
-        temp = temp->next;
-    }
-    printf("NULL\n");
-}
 
 int start_traffic_generator(void* arg) {
     FILE* file = fopen(FILENAME, "a");
@@ -89,20 +40,35 @@ int start_traffic_generator(void* arg) {
     while (1) {
         // Generate vehicle
         Vehicle v;
-        generateVehicleNumber(v.number);
-        v.lane = generateLane();
+        generateVehicleNumber(v.vehicleNumber);
+        v.road[0] = generateLane();   // single char
+        v.road[1] = '\0';  
 
         // Write to file
-        fprintf(file, "%s:%c\n", v.number, v.lane);
+        fprintf(file, "%s:%c\n", v.vehicleNumber, v.lane);
         fflush(file);
 
-        // Enqueue vehicle
-        enqueue(v);
+// Enqueue vehicle in the correct simulator queue
+        if (v.road [0] == 'A') {
+            SDL_LockMutex(mutexA);
+            enqueue(&queueA, v);
+            SDL_UnlockMutex(mutexA);
+        } else if (v.road[0] == 'B') {
+            SDL_LockMutex(mutexB);
+            enqueue(&queueB, v);
+            SDL_UnlockMutex(mutexB);
+        } else if (v.road[0] == 'C') {
+            SDL_LockMutex(mutexC);
+            enqueue(&queueC, v);
+            SDL_UnlockMutex(mutexC);
+        } else if (v.road[0] == 'D') {
+            SDL_LockMutex(mutexD);
+            enqueue(&queueD, v);
+            SDL_UnlockMutex(mutexD);
+        }
 
-        // Print status
-        printf("Generated & Enqueued: %s:%c\n", v.number, v.lane);
-        displayQueue();
-
+        // Print status to console
+        printf("Generated & Enqueued: %s:%s\n", v.vehicleNumber, v.road[0]);
         Sleep(1000); // Wait 1 second before generating next entry
     }
 

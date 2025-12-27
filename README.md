@@ -1,7 +1,10 @@
 Traffic Queue Simulator Project
 Assignment: Assignment #1 - Implementing Queue for solving the traffic light problem
-Student Name: Asmi Baidya 
+
+Name: Asmi Baidya 
+
 Roll Number: 05 
+
 Date: 27th Dec 2025
 
 ---

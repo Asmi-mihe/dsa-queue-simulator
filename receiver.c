@@ -1,13 +1,11 @@
 #include "receiver.h"
+#include "simulator.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
 
-typedef struct Vehicle {
-    char number[9];
-    char lane;
-} Vehicle;
 
 int start_receiver(void* arg){
     FILE *file;

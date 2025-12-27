@@ -1,13 +1,14 @@
 #define SDL_MAIN_HANDLED
 #include "simulator.h"
+#include "receiver.h"
+#include "traffic_generator.h" 
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <stdbool.h>
 #include <stdio.h> 
 #include <string.h>
-#include "receiver.h"
-#include "traffic_generator.h" 
+
 
 //Configuration constants
 #define MAIN_FONT "assets/fonts/DejaVuSans.ttf"
@@ -609,7 +610,7 @@ int readAndParseFiles(void* arg)
 
     // Start threads
     SDL_Thread* tQueue = SDL_CreateThread(chequeQueue, "QueueThread", &sharedData);
-    SDL_Thread* tReadFile = SDL_CreateThread(readAndParseFile, "FileThread", &sharedData);
+    SDL_Thread* tReadFile = SDL_CreateThread(readAndParseFiles, "FileThread", &sharedData);
     SDL_Thread* tReceiver = SDL_CreateThread((int(*)(void*))start_receiver, "ReceiverThread", NULL); 
     SDL_Thread* tGenerator = SDL_CreateThread(start_traffic_generator, "TrafficGeneratorThread", NULL);
 

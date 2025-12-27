@@ -1,5 +1,6 @@
 #include "traffic_generator.h"
 #include "simulator.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,7 +69,7 @@ int start_traffic_generator(void* arg) {
         }
 
         // Print status to console
-        printf("Generated & Enqueued: %s:%s\n", v.vehicleNumber, v.road[0]);
+        printf("Generated & Enqueued: %s:%c\n", v.vehicleNumber, v.road[0]);
         Sleep(1000); // Wait 1 second before generating next entry
     }
 

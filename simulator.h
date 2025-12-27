@@ -81,6 +81,6 @@ void displayText(SDL_Renderer *renderer, TTF_Font *font, const char *text, int x
 
 // Thread functions
 int chequeQueue(void* arg);
-int readAndParseFile(void* arg);
+int readAndParseFiles(void* arg);
 
 #endif

@@ -77,7 +77,7 @@ void init_mutexes() {
     }
 }  
 //Vehicle Sprite spwan
-void spawnVehicleSprite(char road, SharedData* sharedData) {
+void spawnVehicleSprite(char road, SharedData* sharedData, bool canMove) {
     for (int i = 0; i < MAX_SPRITES; i++) {
         if (!sprites[i].active) {
             sprites[i].active = true;
@@ -130,11 +130,12 @@ void spawnVehicleSprite(char road, SharedData* sharedData) {
     }
 }
 
-void updateSprites() {
+void updateSprites(SharedData* sharedData) {
     for (int i = 0; i < MAX_SPRITES; i++) {
         if (sprites[i].active) {
             sprites[i].x += sprites[i].dx;
             sprites[i].y += sprites[i].dy;
+
             if (sprites[i].x < -50 || sprites[i].x > WINDOW_WIDTH + 50 || sprites[i].y < -50 || sprites[i].y > WINDOW_HEIGHT + 50) {
                 sprites[i].active = false;
             }
@@ -153,53 +154,6 @@ void drawSprites(SDL_Renderer *renderer) {
                 sprites[i].color.a);
             SDL_Rect car = {(int)sprites[i].x, (int)sprites[i].y, sprites[i].width, sprites[i].height};
             SDL_RenderFillRect(renderer, &car);
-
-        // Headlights (white rectangles at front depending on direction)
-            SDL_SetRenderDrawColor(renderer, 255, 255, 200, 255); // pale yellow
-            SDL_Rect headlight1, headlight2;
-
-            if (sprites[i].dx > 0) { // moving right
-                headlight1 = (SDL_Rect){(int)(sprites[i].x + sprites[i].width), (int)sprites[i].y, 5, 5};
-                headlight2 = (SDL_Rect){(int)(sprites[i].x + sprites[i].width), (int)(sprites[i].y + sprites[i].height - 5), 5, 5};
-            } 
-            else if 
-            (sprites[i].dx < 0) { // moving left
-                headlight1 = (SDL_Rect){(int)(sprites[i].x - sprites[i].width), (int)sprites[i].y, 5, 5};
-                headlight2 = (SDL_Rect){(int)(sprites[i].x - sprites[i].width), (int)(sprites[i].y + sprites[i].height - 5), 5, 5};
-            } 
-            else if 
-            (sprites[i].dy > 0) { // moving down
-                headlight1 = (SDL_Rect){(int)sprites[i].x, (int)(sprites[i].y + sprites[i].height), 5, 5};
-                headlight2 = (SDL_Rect){(int)(sprites[i].x + sprites[i].width), (int)(sprites[i].y + sprites[i].height), 5, 5};
-            } else if 
-            (sprites[i].dy < 0) { // moving up
-                headlight1 = (SDL_Rect){(int)sprites[i].x, (int)(sprites[i].y - sprites[i].height), 5, 5};
-                headlight2 = (SDL_Rect){(int)(sprites[i].x + sprites[i].width), (int)(sprites[i].y - sprites[i].height), 5, 5};
-            }
-
-            SDL_RenderFillRect(renderer, &headlight1);
-            SDL_RenderFillRect(renderer, &headlight2);
-
-            // Tail-lights (back)
-            SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255);
-            SDL_Rect taillight1, taillight2;
-        if (sprites[i].dx > 0) { // moving right → tail at left
-                taillight1 = (SDL_Rect){sprites[i].x - 5, sprites[i].y, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x - 5, sprites[i].y + sprites[i].height, 5, 5};
-            } else if (sprites[i].dx < 0) { // moving left → tail at right
-                taillight1 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width, sprites[i].y + sprites[i].height, 5, 5};
-            } else if (sprites[i].dy > 0) { // moving down → tail at top
-                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y - 5, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width - 5, sprites[i].y - 5, 5, 5};
-            } else if (sprites[i].dy < 0) { // moving up → tail at bottom
-                taillight1 = (SDL_Rect){sprites[i].x, sprites[i].y + sprites[i].height, 5, 5};
-                taillight2 = (SDL_Rect){sprites[i].x + sprites[i].width - 5, sprites[i].y + sprites[i].height, 5, 5};
-            }
-
-            SDL_RenderFillRect(renderer, &taillight1);
-            SDL_RenderFillRect(renderer, &taillight2);
-
         }
     }
 }
@@ -210,7 +164,8 @@ int chequeQueue(void* arg)
 {
     SharedData* sharedData = (SharedData*)arg;
     int rrIndex=0;
-
+    const int MIN_GREEN_TIME = 5000; // 5 seconds minimum
+    const int PRIORITY_EXTRA_TIME = 2000; // 2 seconds extra for priority
     while (1) {
         // Read sizes safely
         SDL_LockMutex(mutexA); int sizeA = queueSize(&queueA); SDL_UnlockMutex(mutexA);
@@ -236,7 +191,7 @@ int chequeQueue(void* arg)
 
                 if (success) {
                     printf("PRIORITY: Vehicle %s passed from Road A\n", v.vehicleNumber);
-                    spawnVehicleSprite(v.road[0], sharedData);
+                    spawnVehicleSprite(v.road[0], sharedData, true);
                     SDL_Delay(PRIORITY_PASS_TIME);
                     servedCount++;
                 }
@@ -245,7 +200,10 @@ int chequeQueue(void* arg)
             sharedData->lastServedCount = servedCount;
             sharedData->lastGreenDuration = servedCount * PRIORITY_PASS_TIME;
             sharedData->remainingTime = sharedData->lastGreenDuration;
+            if (sharedData->lastGreenDuration < MIN_GREEN_TIME)
+                sharedData->lastGreenDuration = MIN_GREEN_TIME;
 
+            sharedData->remainingTime = sharedData->lastGreenDuration;
         } else {
             // Normal round-robin
             int totalWait = sizeA + sizeB + sizeC + sizeD;
@@ -273,10 +231,20 @@ int chequeQueue(void* arg)
                 if (servedCount) {
                     sharedData->nextLight = light;
                     printf("Vehicle %s passed from Road %c\n", v.vehicleNumber, v.road[0]);
-                    spawnVehicleSprite(v.road[0], sharedData);
+                    bool canMove = (sharedData->nextLight == LIGHT_A && v.road[0]=='A') ||
+                    (sharedData->nextLight == LIGHT_B && v.road[0]=='B') ||
+                    (sharedData->nextLight == LIGHT_C && v.road[0]=='C') ||
+                    (sharedData->nextLight == LIGHT_D && v.road[0]=='D');
+                    spawnVehicleSprite(v.road[0], sharedData, canMove);
                     SDL_Delay(VEHICLE_PASS_TIME);
+
                     sharedData->lastServedCount = servedCount;
-                    sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME;
+                    sharedData->lastGreenDuration = servedCount * VEHICLE_PASS_TIME*3;
+                    sharedData->remainingTime = sharedData->lastGreenDuration;
+
+                    if (sharedData->lastGreenDuration < MIN_GREEN_TIME)
+                        sharedData->lastGreenDuration = MIN_GREEN_TIME;
+
                     sharedData->remainingTime = sharedData->lastGreenDuration;
                     served = true;
                     break;
@@ -330,21 +298,42 @@ void drawArrow(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, i
 
 // Draw traffic light boxes
 void drawLight(SDL_Renderer *renderer, int x, int y, bool isRed) {
-    SDL_Rect box = {x, y, 30, 30};
+    int radius = 10;  // circle radius
+
+    // Draw outer gray circle (housing)
     SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
-    SDL_RenderFillRect(renderer, &box);
+    for (int w = 0; w < 3; w++) { // thickness
+        for (int dy = -radius; dy <= radius; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                if (dx*dx + dy*dy <= radius*radius) {
+                    SDL_RenderDrawPoint(renderer, x + dx, y + dy);
+                }
+            }
+        }
+    }
 
-    if (isRed) SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-    else SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
-
-    SDL_Rect light = {x+5, y+5, 20, 20};
-    SDL_RenderFillRect(renderer, &light);
+    // Draw inner colored circle
+    SDL_Color color = isRed ? (SDL_Color){255,0,0,255} : (SDL_Color){0,200,0,255};
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    for (int dy = -radius+2; dy <= radius-2; dy++) {
+        for (int dx = -radius+2; dx <= radius-2; dx++) {
+            if (dx*dx + dy*dy <= (radius-2)*(radius-2)) {
+                SDL_RenderDrawPoint(renderer, x + dx, y + dy);
+            }
+        }
+    }
 }
 
+
 void drawRoads(SDL_Renderer *renderer, TTF_Font *font) {
-    SDL_SetRenderDrawColor(renderer, 200,200,200,255);
+    // Draw green grass background
+    SDL_SetRenderDrawColor(renderer, 120, 200, 120, 255); // light green
+    SDL_RenderClear(renderer);
+
+    // Draw roads (dark asphalt)
+    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255); // dark gray
+
     // Vertical road
-    
     SDL_Rect verticalRoad = {WINDOW_WIDTH / 2 - ROAD_WIDTH / 2, 0, ROAD_WIDTH, WINDOW_HEIGHT};
     SDL_RenderFillRect(renderer, &verticalRoad);
 
@@ -352,62 +341,35 @@ void drawRoads(SDL_Renderer *renderer, TTF_Font *font) {
     SDL_Rect horizontalRoad = {0, WINDOW_HEIGHT / 2 - ROAD_WIDTH / 2, WINDOW_WIDTH, ROAD_WIDTH};
     SDL_RenderFillRect(renderer, &horizontalRoad);
 
-    // lane separators
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    for(int i=0; i<=3; i++){
-        // Horizontal lanes
-        SDL_RenderDrawLine(renderer, 
-            0, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,  // x1,y1
-            WINDOW_WIDTH/2 - ROAD_WIDTH/2, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i // x2, y2
-        );
+    // Draw dashed lane separators
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); // white lines
+    int dashLength = 15, gap = 10;
 
-        SDL_RenderDrawLine(renderer,
-            WINDOW_WIDTH, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i,
-            WINDOW_WIDTH/2 + ROAD_WIDTH/2, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + LANE_WIDTH*i
-        );
-        // Vertical lanes
-        SDL_RenderDrawLine(renderer,
-            WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, 0,
-            WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, WINDOW_HEIGHT/2 - ROAD_WIDTH/2
-        );
-        SDL_RenderDrawLine(renderer,
-            WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, 800,
-            WINDOW_WIDTH/2 - ROAD_WIDTH/2 + LANE_WIDTH*i, WINDOW_HEIGHT/2 + ROAD_WIDTH/2
-        );
+    // Vertical lanes
+    for (int i = 1; i < ROAD_WIDTH / LANE_WIDTH; i++) {
+        int x = WINDOW_WIDTH/2 - ROAD_WIDTH/2 + i*LANE_WIDTH;
+        for (int y = 0; y < WINDOW_HEIGHT; y += dashLength + gap) {
+            SDL_RenderDrawLine(renderer, x, y, x, y + dashLength);
+        }
     }
-    displayText(renderer, font, "A",WINDOW_WIDTH/2 - 10, 10);
-    displayText(renderer, font, "B",WINDOW_WIDTH/2 - 10, WINDOW_HEIGHT - 30);
-    displayText(renderer, font, "C",WINDOW_WIDTH/2 - 10, WINDOW_HEIGHT/2 - 10);
-    displayText(renderer, font, "D",10, WINDOW_HEIGHT/2 - 10);
-    
-     // Priority label
-    displayText(renderer, font, "Priority Lane: AL2", 20, 20);
-}
-void drawCountdownBar(SDL_Renderer *renderer, TTF_Font *font, int x, int y, int width, int height, SharedData *sharedData) {
-    if (sharedData->lastGreenDuration <= 0) 
-    return;
 
-    // Fraction of time left
-    float fraction = (float)sharedData->remainingTime / (float)sharedData->lastGreenDuration;
-    if (fraction < 0) 
-    fraction = 0;
-
-    // Draw shrinking bar
-    SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
-    SDL_Rect bar = {x, y, (int)(width * fraction), height};
-    SDL_RenderFillRect(renderer, &bar);
-
-    // Outline
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_Rect outline = {x, y, width, height};
-    SDL_RenderDrawRect(renderer, &outline);
-
-    // Show seconds left
-    char buffer[32];
-    float secondsLeft = sharedData->remainingTime / 1000.0f;
-    snprintf(buffer, sizeof(buffer), "%.1f s left", secondsLeft);
-    displayText(renderer, font, buffer, x, y - 20);
-}
+    // Horizontal lanes
+    for (int i = 1; i < ROAD_WIDTH / LANE_WIDTH; i++) {
+        int y = WINDOW_HEIGHT/2 - ROAD_WIDTH/2 + i*LANE_WIDTH;
+        for (int x = 0; x < WINDOW_WIDTH; x += dashLength + gap) {
+            SDL_RenderDrawLine(renderer, x, y, x + dashLength, y);
+        }
+    }
+    // Road labels
+        int offset = 20;    
+        displayText(renderer, font, "A",WINDOW_WIDTH/2 - 10, offset);
+        displayText(renderer, font, "B",WINDOW_WIDTH/2 - 10, WINDOW_HEIGHT - ROAD_WIDTH + offset);
+        displayText(renderer, font, "C",WINDOW_WIDTH - offset, WINDOW_HEIGHT/2 - 10);
+        displayText(renderer, font, "D",offset, WINDOW_HEIGHT/2 - 10);
+        
+        // Priority label
+        displayText(renderer, font, "Priority Lane: AL2", 20, 20);
+    }
 
 
 void displayText(SDL_Renderer *renderer, TTF_Font *font, const char *text, int x, int y){
@@ -429,45 +391,12 @@ void displayText(SDL_Renderer *renderer, TTF_Font *font, const char *text, int x
 }
 
 void drawHUD(SDL_Renderer *renderer, TTF_Font *font, SharedData *sharedData) {
-    char buffer[64];
-
-    // Road A
-    SDL_LockMutex(mutexA);
-    int sizeA = queueSize(&queueA);
-    SDL_UnlockMutex(mutexA);
-    snprintf(buffer, sizeof(buffer), "Road A: %d vehicles", sizeA);
-    displayText(renderer, font, buffer, 20, 60);
-
-    // Road B
-    SDL_LockMutex(mutexB);
-    int sizeB = queueSize(&queueB);
-    SDL_UnlockMutex(mutexB);
-    snprintf(buffer, sizeof(buffer), "Road B: %d vehicles", sizeB);
-    displayText(renderer, font, buffer, 20, 90);
-
-    // Road C
-    SDL_LockMutex(mutexC);
-    int sizeC = queueSize(&queueC);
-    SDL_UnlockMutex(mutexC);
-    snprintf(buffer, sizeof(buffer), "Road C: %d vehicles", sizeC);
-    displayText(renderer, font, buffer, 20, 120);
-
-    // Road D
-    SDL_LockMutex(mutexD);
-    int sizeD = queueSize(&queueD);
-    SDL_UnlockMutex(mutexD);
-    snprintf(buffer, sizeof(buffer), "Road D: %d vehicles", sizeD);
-    displayText(renderer, font, buffer, 20, 150);
+  int sizeA = queueSize(&queueA);
 
     // Priority status
     if (sizeA > 10) {
-        displayText(renderer, font, "PRIORITY ACTIVE: Road A (AL2)", 20, 180);}
-
-    float seconds = sharedData->lastGreenDuration / 1000.0f;  // convert ms → seconds
-    snprintf(buffer, sizeof(buffer), "Last Green: %d vehicles, %1f s",
-    sharedData->lastServedCount,
-    seconds);
-        displayText(renderer, font, buffer, 20, 210);
+        displayText(renderer, font, "PRIORITY ACTIVE: Road A (AL2)", 20, 180);
+}
 }
 
 // Refresh lights based on SharedData
@@ -487,30 +416,23 @@ void refreshLights(SDL_Renderer *renderer, TTF_Font *font, SharedData *sharedDat
         case LIGHT_D: redD = false; break;
         default: break;
     }
+    // Draw traffic lights
+    // Top of intersection
+    drawLight(renderer, WINDOW_WIDTH/2 - 50, WINDOW_HEIGHT/2 - ROAD_WIDTH/2 - 20, redA); 
 
-        if (sharedData->nextLight == LIGHT_A) {
-            drawCountdownBar(renderer, font, WINDOW_WIDTH/2 - 40, 140, 80, 10, sharedData);
-        }
-        if (sharedData->nextLight == LIGHT_B) {
-            drawCountdownBar(renderer, font, WINDOW_WIDTH/2 - 40, WINDOW_HEIGHT-100, 80, 10, sharedData);
-        }
-        if (sharedData->nextLight == LIGHT_C) {
-            drawCountdownBar(renderer, font, WINDOW_WIDTH-100, WINDOW_HEIGHT/2 + 40, 80, 10, sharedData);
-        }
-        if (sharedData->nextLight == LIGHT_D) {
-            drawCountdownBar(renderer, font, 40, WINDOW_HEIGHT/2 + 40, 80, 10, sharedData);
-        }
+    // Bottom of intersection
+    drawLight(renderer, WINDOW_WIDTH/2 + 20, WINDOW_HEIGHT/2 + ROAD_WIDTH/2 + 5, redB);
 
-    // Position lights near each road
-    drawLight(renderer, WINDOW_WIDTH/2 - 15, 100, redA);          // Top (A)
-    drawLight(renderer, WINDOW_WIDTH/2 - 15, WINDOW_HEIGHT-130, redB); // Bottom (B)
-    drawLight(renderer, WINDOW_WIDTH-130, WINDOW_HEIGHT/2 - 15, redC); // Right (C)
-    drawLight(renderer, 100, WINDOW_HEIGHT/2 - 15, redD);         // Left (D)
+    // Right of intersection
+    drawLight(renderer, WINDOW_WIDTH/2 + ROAD_WIDTH/2 + 5, WINDOW_HEIGHT/2 - 50, redC);
+
+    // Left of intersection
+    drawLight(renderer, WINDOW_WIDTH/2 - ROAD_WIDTH/2 - 20, WINDOW_HEIGHT/2 + 20, redD);
+           // Left (D)
 
     drawHUD(renderer, font, sharedData);
 
 }
-
 
 //pass the queue on this function for sharing the data
 int readAndParseFiles(void* arg)
@@ -621,7 +543,7 @@ int readAndParseFiles(void* arg)
                 localRunning = false;
             }
         }
-        updateSprites();
+        updateSprites(&sharedData);
         refreshLights(renderer, font, &sharedData);
         drawSprites(renderer);
         SDL_RenderPresent(renderer);

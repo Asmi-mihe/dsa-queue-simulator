@@ -71,13 +71,12 @@ int queueSize(VehicleQueue* q);
 
 
 // Function prototypes
-void spawnVehicleSprite(char road, SharedData* sharedData);
-void updateSprites();
+void spawnVehicleSprite(char road, SharedData* sharedData, bool canMove);
+void updateSprites(SharedData* sharedData);
 void drawSprites(SDL_Renderer *renderer);
 void drawRoads(SDL_Renderer *renderer, TTF_Font *font);
 void drawHUD(SDL_Renderer *renderer, TTF_Font *font, SharedData *sharedData);
 void refreshLights(SDL_Renderer *renderer, TTF_Font *font, SharedData *sharedData);
-void drawCountdownBar(SDL_Renderer *renderer, TTF_Font *font, int x, int y, int width, int height, SharedData *sharedData);
 void displayText(SDL_Renderer *renderer, TTF_Font *font, const char *text, int x, int y);
 
 // Thread functions

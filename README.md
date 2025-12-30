@@ -202,6 +202,6 @@ https://www.geeksforgeeks.org/queue-data-structure/
 •	TutorialsPoint. Queue Data Structure.
 https://www.tutorialspoint.com/data\_structures\_algorithms/queue\_algorithm.htm
 
-### 🎥 Simulator Demo
+### Simulator Demo
 
-![Queue Simulator Demo](Dsa-Queue-Simulator.gif)
+![Queue Simulator Demo](assets/gifs/Dsa-Queue-Simulator.gif)
